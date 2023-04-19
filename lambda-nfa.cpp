@@ -16,7 +16,9 @@ LambdaNFA::LambdaNFA(const LambdaNFA& obj){
     for(int elem: obj.Q) {
         if (!obj.transition[elem].empty())
             this->transition[elem] = obj.transition[elem];
-        this->F[elem] = obj.F.at(elem);
+        try {
+            this->F[elem] = obj.F.at(elem);
+        }catch(std::out_of_range&){}
     }
 }
 
@@ -27,13 +29,15 @@ LambdaNFA& LambdaNFA::operator=(const LambdaNFA& obj){
         for(int elem: obj.Q) {
             if (!obj.transition[elem].empty())
                 this->transition[elem] = obj.transition[elem];
-            this->F[elem] = obj.F.at(elem);
+            try {
+                this->F[elem] = obj.F.at(elem);
+            }catch(std::out_of_range&){}
         }
     }
     return *this;
 }
 
-std::ostream& operator<<(std::ostream& out, const LambdaNFA& obj){
+std::ostream& operator<<(std::ostream& out, LambdaNFA& obj){
     out << "Automata nodes:";
     for(int i = 0; i < obj.Q.size(); ++i)
     {
@@ -44,8 +48,13 @@ std::ostream& operator<<(std::ostream& out, const LambdaNFA& obj){
     out << "Final states:";
     for(int i = 0; i < obj.Q.size(); ++i)
     {
-        if(obj.F.at(obj.Q[i]))
-            out << " " << obj.Q[i];
+        try {
+            if (obj.F[obj.Q[i]])
+                out << " " << obj.Q[i];
+        }
+        catch (std::out_of_range){
+
+        }
     }
     out << "\nTransitions:\n";
     for(int elem: obj.Q) {
@@ -69,9 +78,9 @@ void LambdaNFA::addTransition(int startState, char letter, int endState){
         this->Q.push_back(endState);
     }
     transition[startState][letter].insert(endState);
-    if(F[startState] != true)
+    if(!F[startState])
         F[startState] = false;
-    if(F[endState] != true)
+    if(!F[endState])
         F[endState] = false;
     std::sort(this->Q.begin(), this->Q.end());
 }
@@ -79,45 +88,8 @@ void LambdaNFA::addTransition(int startState, char letter, int endState){
 void LambdaNFA::addFinalState(int finalState, bool final){
     F[finalState] = final;
 }
-
-void LambdaNFA::readFromFile(const std::string& filename)
-{
-    std::ifstream f1(filename);
-    f1 >> this->initialState;
-    int temp, node1, node2;
-    char letter;
-    std::string s;
-    std::getline(f1, s);
-    std::stringstream ss(s);
-    while(ss >> temp)
-        addFinalState(temp, 1);
-    while(f1)
-    {   
-        f1 >> node1;
-        f1 >> letter;
-        f1 >> node2;
-        addTransition(node1, letter, node2);
-    }
-}
-
-void LambdaNFA::lambda_paths(std::unordered_set<int>& currentStates, std::unordered_set<int> &states)
-{
-    std::unordered_set<int> tempStates; // The nodes where the current states have lambda-paths
-    bool allEquals = true;
-    for(auto state: states){
-        currentStates.insert(state);
-        tempStates = transition[state]['#'];
-        for(auto elem: tempStates)
-        {
-            if(std::find(currentStates.begin(), currentStates.end(), elem) == currentStates.end())
-                allEquals = false;
-        }
-        if(allEquals == false)
-            lambda_paths(currentStates, this->transition[state]['#']);
-    }
-}
-
 void LambdaNFA::transitionNormalisation(std::unordered_map<int, int> changes) {
+    std::unordered_map<char, std::unordered_set<int>> tempTransition[200];
     for(int& elem: this->Q)
     {
         if(!transition[elem].empty())
@@ -130,97 +102,122 @@ void LambdaNFA::transitionNormalisation(std::unordered_map<int, int> changes) {
                     i->second.insert(changes[temp[pos]]);
                 }
                 temp.clear();
+                tempTransition[changes[elem]][i->first] = i->second;
             }
-            transition[changes[elem]] = transition[elem];
-            if(changes[elem] != elem)
                 transition[elem].clear();
         }
     }
+    for(int& elem: this->Q)
+        this->transition[changes[elem]] = tempTransition[changes[elem]];
 }
 
 void LambdaNFA::normalisation(LambdaNFA& L1, LambdaNFA& L2){
     int maxNode = 0;
+    std::unordered_map<int, bool> temp;
     std::unordered_map<int, int> changes; // changes[previousNode] = newNode
     L1.initialState = maxNode;
     for(int i = 0; i < L1.Q.size(); ++i){
         changes[L1.Q[i]] = maxNode++;
-        L1.F[changes[L1.Q[i]]] = false;
         if(L1.F[L1.Q[i]])
         {
             L1.F[L1.Q[i]] = false;
-            L1.F[changes[L1.Q[i]]] = true;
+            temp[changes[L1.Q[i]]] = true;
         }
     }
     L1.transitionNormalisation(changes);
     for(int i = 0; i < L1.Q.size(); ++i){
         L1.Q[i] = changes[L1.Q[i]];
     }
+    L1.F = temp;
+    temp.clear();
     changes.clear();
     L2.initialState = maxNode;
     for(int i = 0; i < L2.Q.size(); ++i){
         changes[L2.Q[i]] = maxNode++;
-        L2.F[changes[L2.Q[i]]] = false;
         if(L2.F[L2.Q[i]])
         {
             L2.F[L2.Q[i]] = false;
-            L2.F[changes[L2.Q[i]]] = true;
+            temp[changes[L2.Q[i]]] = true;
         }
     }
     L2.transitionNormalisation(changes);
     for(int i = 0; i < L2.Q.size(); ++i){
         L2.Q[i] = changes[L2.Q[i]];
     }
+    L2.F = temp;
+}
+
+LambdaNFA LambdaNFA::unions(LambdaNFA& L1, LambdaNFA& L2){
+    LambdaNFA L;
+    LambdaNFA::normalisation(L, L1);
+    for(int i = 0; i < L1.Q.size(); ++i){
+        if(std::find(L.Q.begin(), L.Q.end(), L1.Q[i]) == L.Q.end())
+            L.Q.push_back(L1.Q[i]);
+        L.transition[L1.Q[i]] = L1.transition[L1.Q[i]];
+        try {
+            if (L1.F[L1.Q[i]])
+                L.F[L1.Q[i]] = true;
+        }
+        catch(std::out_of_range&){}
+    }
+    L.addTransition(L.initialState, '#', L1.initialState);
+    LambdaNFA::normalisation(L, L2);
+    for(int i = 0; i < L2.Q.size(); ++i){
+        if(std::find(L.Q.begin(), L.Q.end(), L2.Q[i]) == L.Q.end())
+            L.Q.push_back(L2.Q[i]);
+        L.transition[L2.Q[i]] = L2.transition[L2.Q[i]];
+        try {
+            if (L2.F[L2.Q[i]])
+                L.F[L2.Q[i]] = true;
+        }
+        catch(std::out_of_range&){}
+    }
+    L.addTransition(L.initialState, '#', L2.initialState);
+    std::cout << L;
+    return L;
 }
 
 LambdaNFA LambdaNFA::concatenation(LambdaNFA& L1, LambdaNFA& L2){
     LambdaNFA::normalisation(L1, L2);
     LambdaNFA L = L1;
     for(int i = 0; i < L.Q.size(); ++i)
-        if(L.F[Q[i]] == true)
-        {
-            L.F[Q[i]] = false;
-            L.addTransition(Q[i], '#', L2.initialState);
+    {
+        try{
+            if(L.F[L.Q[i]]) {
+                L.F[L.Q[i]] = false;
+                L.addTransition(L.Q[i], '#', L2.initialState);
+            }
         }
+        catch(std::out_of_range&){}
+    }
+    for(int i = 0; i < L2.Q.size(); ++i) {
+        if (!L2.transition[L2.Q[i]].empty())
+            L.transition[L2.Q[i]] = L2.transition[L2.Q[i]];
+        try{
+            if(L2.F[L2.Q[i]])
+                L.F[L2.Q[i]] = true;
+        }catch(std::out_of_range&){}
+        if(std::find(L.Q.begin(), L.Q.end(), L2.Q[i]) == L.Q.end())
+            L.Q.push_back(L2.Q[i]);
+    }
+    return L;
 }
 
-//int main(){
-//    LambdaNFA obj;
-//     obj.addTransition(0, "#", 2);
-//     obj.addTransition(0, "1", 1);
-//     obj.addTransition(0, "2", 3);
-//     obj.addTransition(1, "1", 0);
-//     obj.addTransition(2, "#", 0);
-//     obj.addTransition(2, "0", 4);
-//     obj.addTransition(2, "2", 3);
-//     obj.addTransition(3, "2", 0);
-//     obj.addTransition(3, "2", 2);
-//     obj.addTransition(4, "0", 2);
-//     obj.addFinalState(2, 1);
-//     obj.addFinalState(0, 1);
-//
-//
-//    obj.addTransition(0, "#", 1);
-//    obj.addTransition(0, "b", 1);
-//    obj.addTransition(0, "#", 3);
-//    obj.addTransition(1, "b", 2);
-//    obj.addTransition(2, "a", 1);
-//    obj.addTransition(3, "b", 0);
-//    obj.addTransition(3, "#", 1);
-//    obj.addTransition(3, "#", 2);
-//    obj.addTransition(3, "a", 4);
-//    obj.addTransition(3, "a", 3);
-//    obj.addTransition(4, "#", 2);
-//    obj.addTransition(4, "b", 4);
-//    obj.addTransition(4, "b", 3);
-//    obj.addFinalState(0, 1);
-//
-//    std::vector<int> path;
-//    path.assign(6, -1);
-//    obj.depthSearch(path, {0}, 0, "aababb");
-//    obj.printPaths();
-//    // std::unordered_set<int> temp = {0};
-//    // obj.lambda_paths(temp, temp);
-//    // for(auto elem: temp)
-//    //     std::cout << elem << " ";
-//    return 0;
-//}
+LambdaNFA LambdaNFA::star(LambdaNFA& L1){
+    LambdaNFA L;
+    LambdaNFA::normalisation(L, L1);
+    L.addTransition(L.initialState, '#', L1.initialState);
+    L.addFinalState(L.initialState, true);
+    for(int i = 0; i < L1.Q.size(); ++i){
+        if(std::find(L.Q.begin(), L.Q.end(), L1.Q[i]) == L.Q.end())
+            L.Q.push_back(L1.Q[i]);
+        L.transition[L1.Q[i]] = L1.transition[L1.Q[i]];
+        try{
+            if(L1.F[L1.Q[i]]){
+                L.F[L1.Q[i]] = true;
+                L.addTransition(L1.Q[i], '#', L.initialState);
+            }
+        }catch(std::out_of_range&){}
+    }
+    return L;
+}

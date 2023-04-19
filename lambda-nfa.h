@@ -1,6 +1,5 @@
 #ifndef REGULAR_EXPRESSIONS_TO_LAMBDA_NFA_H
 #define REGULAR_EXPRESSIONS_TO_LAMBDA_NFA_H
-// #pragma
 
 #include <vector>
 #include <string>
@@ -19,23 +18,22 @@ public:
     LambdaNFA(const LambdaNFA& obj);
     
     LambdaNFA& operator= (const LambdaNFA& obj);
-
-    void readFromFile(const std::string& filename);
     
     void addTransition(int startState, char letter, int endState);
 
     void addFinalState(int finalState, bool final);
 
-    friend std::ostream& operator<<(std::ostream &out, const LambdaNFA& obj);
-
-    void lambda_paths(std::unordered_set<int> &currentStates, std::unordered_set<int> &states);
+    friend std::ostream& operator<<(std::ostream &out, LambdaNFA& obj);
 
     void transitionNormalisation(std::unordered_map<int, int> changes); // iterates through L1 transitions and replaces previousNode with newNode
 
     static void normalisation(LambdaNFA& L1, LambdaNFA& L2); // Makes sure that L1 and L2 have different numbers for nodes
 
-    LambdaNFA concatenation(LambdaNFA& L1, LambdaNFA& L2);
+    static LambdaNFA unions(LambdaNFA& L1, LambdaNFA& L2);
 
+    static LambdaNFA concatenation(LambdaNFA& L1, LambdaNFA& L2);
+
+    static LambdaNFA star(LambdaNFA& L1);
 };
 
 #endif //REGULAR_EXPRESSIONS_TO_LAMBDA_NFA_H
