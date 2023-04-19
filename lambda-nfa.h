@@ -11,15 +11,10 @@ class LambdaNFA{
     int initialState;
     std::vector<int> Q; // Nodes
     std::unordered_map<int, bool> F; // Final states
-    std::unordered_map<std::string, std::unordered_set<int>> transition[200]; // Transition function
-
-    std::vector<int> result[100] = {};
-    int k = 0;
+    std::unordered_map<char, std::unordered_set<int>> transition[200]; // Transition function
     
 public:
-    std::unordered_map<std::string, std::unordered_set<int>> getQ() const;
-
-    LambdaNFA(int initialState = 0);
+    explicit LambdaNFA(int initialState = 0);
     
     LambdaNFA(const LambdaNFA& obj);
     
@@ -27,17 +22,20 @@ public:
 
     void readFromFile(const std::string& filename);
     
-    void addTransition(int startState, std::string letter, int endState);
+    void addTransition(int startState, char letter, int endState);
 
     void addFinalState(int finalState, bool final);
 
     friend std::ostream& operator<<(std::ostream &out, const LambdaNFA& obj);
 
-    void depthSearch(std::vector<int> &path, std::unordered_set<int> currentState, int depth, std::string word);
-
     void lambda_paths(std::unordered_set<int> &currentStates, std::unordered_set<int> &states);
 
-    void printPaths();
+    void transitionNormalisation(std::unordered_map<int, int> changes); // iterates through L1 transitions and replaces previousNode with newNode
+
+    static void normalisation(LambdaNFA& L1, LambdaNFA& L2); // Makes sure that L1 and L2 have different numbers for nodes
+
+    LambdaNFA concatenation(LambdaNFA& L1, LambdaNFA& L2);
+
 };
 
 #endif //REGULAR_EXPRESSIONS_TO_LAMBDA_NFA_H
